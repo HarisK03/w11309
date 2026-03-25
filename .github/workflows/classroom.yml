@@ -1,0 +1,56 @@
+name: Deployment Check
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  check-deployment:
+    if: github.actor != 'github-classroom[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Ensure submission.txt exists
+        run: |
+          if [ ! -f submission.txt ]; then
+            echo "submission.txt not found"
+            exit 1
+          fi
+
+      - name: Read URL
+        run: |
+          URL="$(cat submission.txt | tr -d '\r\n' | xargs)"
+
+          if [ -z "$URL" ]; then
+            echo "submission.txt is empty"
+            exit 1
+          fi
+
+          if [[ ! "$URL" =~ ^https?:// ]]; then
+            echo "Invalid URL format (must start with http:// or https://)"
+            exit 1
+          fi
+
+          echo "URL=$URL" >> "$GITHUB_ENV"
+          echo "Submitted URL: $URL"
+
+      - name: Check deployment and content
+        run: |
+          set -eo pipefail
+
+          echo "Fetching: $URL"
+
+          curl -L --fail --max-time 20 "$URL" -o body.html
+
+          echo "Checking page content for CSC309..."
+
+          if ! grep -q "CSC309" body.html; then
+            echo "Expected content 'CSC309' not found on homepage."
+            exit 1
+          fi
+
+          echo "Deployment reachable and contains CSC309."
