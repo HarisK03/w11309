@@ -1,6 +1,9 @@
-import { PrismaClient } from "@prisma/client";
+import { createClient } from '@supabase/supabase-js'
 
-const prisma = new PrismaClient();
+const supabase = createClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL,
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+)
 
 export default async function handler(req, res) {
   if (req.method === "POST") {
@@ -12,23 +15,19 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: "No answers provided" });
       }
 
-      // Create one answer at a time
-      for (const [questionId, option] of Object.entries(answers)) {
-        try {
-          await prisma.quizAnswer.create({
-            data: {
-              questionId: parseInt(questionId),
-              selectedOption: option,
-            },
-          });
-          console.log(`Created answer for question ${questionId}`);
-        } catch (error) {
-          console.error(
-            `Error creating answer for question ${questionId}:`,
-            error
-          );
-          throw error;
-        }
+      // Insert all answers in batch
+      const answerData = Object.entries(answers).map(([questionId, selectedOption]) => ({
+        questionId: parseInt(questionId),
+        selectedOption
+      }));
+
+      const { error } = await supabase
+        .from('quiz_answer')
+        .insert(answerData);
+
+      if (error) {
+        console.error("Database error:", error);
+        throw error;
       }
 
       res.status(200).json({
@@ -45,6 +44,6 @@ export default async function handler(req, res) {
     }
   } else {
     res.setHeader("Allow", ["POST"]);
-    res.status(405).json({ message: `Method ${req.method} Not Allowed` });
+    res.status(405).json({ message: `${req.method} Method Not Allowed` });
   }
 }
